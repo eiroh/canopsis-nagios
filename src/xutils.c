@@ -163,3 +163,19 @@ xstrdup(const char *dup)
         strncpy(copy, dup, len + 1);
     return copy;
 }
+
+int
+xstrcmp (const char *c1, const char *c2)
+{
+    size_t s1 = xstrlen (c1);
+    size_t s2 = xstrlen (c2);
+
+    /* little optimisation based on the strings length */
+    if (s1 == 0 && s2 == 0)
+        return 0;
+    if (s1 == 0)
+        return -1;
+    if (s2 == 0)
+        return +1;
+    return strncmp (c1, c2, xmax (s1, s2));
+}

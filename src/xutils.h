@@ -109,4 +109,13 @@ char *xstrdup(const char *dup);
 */
 size_t xstrlen(const char *src);
 
+/**
+* Compares two strings
+* @param c1 String to compare
+* @param c2 String to compare
+* @return <0 if c1 is lesser than c2, >0 if c2 is lesser than c1, 0 if c1
+* equals c2
+*/
+int xstrcmp (const char *c1, const char *c2);
+
 #endif                            // strutil_h
