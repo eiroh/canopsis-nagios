@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -46,8 +45,12 @@ static int amqp_wait_time = 10;
 
 static amqp_connection_state_t conn = NULL;
 
-static pthread_mutex_t mutex_amqp_con = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_amqp_decon = PTHREAD_MUTEX_INITIALIZER;
+#ifdef PTHREAD
+    #include <pthread.h>
+
+    static pthread_mutex_t mutex_amqp_con = PTHREAD_MUTEX_INITIALIZER;
+    static pthread_mutex_t mutex_amqp_decon = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 void
 on_error (int x, char const *context)
@@ -125,8 +128,10 @@ on_amqp_error (amqp_rpc_reply_t x, char const *context)
 void
 amqp_connect (void)
 {
+#ifdef PTHREAD
   if (g_options.multithread)
       pthread_mutex_lock (&mutex_amqp_con);
+#endif
   amqp_errors = false;
 
   struct timeval tv;
@@ -185,15 +190,19 @@ amqp_connect (void)
 
     }
   amqp_lastconnect = now;
+#ifdef PTHREAD
   if (g_options.multithread)
       pthread_mutex_unlock (&mutex_amqp_con);
+#endif
 }
 
 void
 amqp_disconnect (void)
 {
+#ifdef PTHREAD
   if (g_options.multithread)
       pthread_mutex_lock (&mutex_amqp_decon);
+#endif
   amqp_errors = false;
   
   if (amqp_connected)
@@ -220,8 +229,10 @@ amqp_disconnect (void)
     {
       n2a_logger (LG_INFO, "AMQP: Impossible to disconnect, not connected");
     }
+#ifdef PTHREAD
   if (g_options.multithread)
       pthread_mutex_unlock (&mutex_amqp_decon);
+#endif
 }
 
 int

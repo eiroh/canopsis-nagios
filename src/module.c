@@ -26,6 +26,12 @@
 #include "cache.h"
 #include "module.h"
 
+#ifdef PTHREAD
+    #define MTH "enabled"
+#else
+    #define MTH "disabled"
+#endif
+
 NEB_API_VERSION (CURRENT_NEB_API_VERSION)
 
 static char *g_args = NULL;
@@ -67,6 +73,7 @@ nebmodule_init (int flags __attribute__ ((__unused__)), char *args, nebmodule *h
   // Init module
   //logger (LG_INFO, handle.info);
   n2a_logger (LG_INFO, "NEB2amqp %s by Capensis. (connector: %s)", VERSION, g_options.connector);
+  n2a_logger (LG_INFO, "multithreading support %s", MTH);
   n2a_logger (LG_INFO, "Please visit us at http://www.canopsis.org/");
 
   if (! verify_event_broker_options ()) {

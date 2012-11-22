@@ -29,7 +29,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
-#include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -44,17 +43,28 @@ static time_t last_pop = 0;
 static int lastid = 1;
 static unsigned int thread_running = FALSE;
 static unsigned int pop_lock = FALSE;
-static pthread_t thread_pop;
-static pthread_mutex_t mutex_pop = PTHREAD_MUTEX_INITIALIZER;
 static const char *tkey = NULL, *tmsg = NULL;
 
-#define n2a_mutex_lock(lock) \
-if (g_options.multithread)   \
-    pthread_mutex_lock (lock);
+#ifdef PTHREAD
+    #include <pthread.h>
 
-#define n2a_mutex_unlock(lock) \
-if (g_options.multithread)     \
-    pthread_mutex_unlock (lock);
+    static pthread_t thread_pop;
+    static pthread_mutex_t mutex_pop = PTHREAD_MUTEX_INITIALIZER;
+
+    #define n2a_mutex_lock(lock) \
+    if (g_options.multithread)   \
+        pthread_mutex_lock (lock);
+
+    #define n2a_mutex_unlock(lock) \
+    if (g_options.multithread)     \
+        pthread_mutex_unlock (lock);
+#else
+    static void *thread_pop;
+    static void *mutex_pop;
+
+    #define n2a_mutex_lock(lock) ((void)lock)
+    #define n2a_mutex_unlock(lock) ((void)lock)
+#endif
 
 static int
 compare (const void * a, const void * b)
@@ -107,11 +117,13 @@ create_empty_file (const char *file)
 void
 n2a_clear_cache (void)
 {
+#ifdef PTHREAD
     if (thread_running && g_options.multithread) {
         n2a_logger (LG_INFO, "waiting for %ld...", thread_pop);
         pthread_join (thread_pop, NULL);
         n2a_logger (LG_INFO, "done");
     }
+#endif
     n2a_flush_cache (TRUE);
     n2a_mutex_lock (&mutex_pop);
     iniparser_freedict (ini);
@@ -326,8 +338,10 @@ n2a_pop_process (void *data)
 end:
     alarm (g_options.autopop);
     pop_lock = FALSE;
+#ifdef PTHREAD
     if (g_options.multithread)
         pthread_exit (NULL);
+#endif
 
     return NULL;
 }
@@ -354,6 +368,7 @@ n2a_pop_all_cache (unsigned int force)
     if ((n / 2) == 0)
         goto reschedule;
 
+#ifdef PTHREAD        
     if (thread_running && g_options.multithread) {
         n2a_logger (LG_INFO, "waiting for %ld...\n", thread_pop);
         pthread_join (thread_pop, NULL);
@@ -364,8 +379,11 @@ n2a_pop_all_cache (unsigned int force)
         thread_running = TRUE;
         n2a_logger (LG_INFO, "depiling thread %ld running", thread_pop);
     } else {
+#endif
         n2a_pop_process (NULL);
+#ifdef PTHREAD
     }
+#endif
     return;
 
 reschedule:
