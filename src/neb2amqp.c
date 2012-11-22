@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <pthread.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -37,13 +37,17 @@
 
 extern struct options g_options;
 
-int sockfd;
-bool amqp_connected = false;
-bool amqp_errors = false;
-int amqp_lastconnect = 0;
-int amqp_wait_time = 10;
+static int sockfd;
+static bool amqp_connected = false;
+static bool amqp_errors = false;
+static bool first = true;
+static int amqp_lastconnect = 0;
+static int amqp_wait_time = 10;
 
-amqp_connection_state_t conn = NULL;
+static amqp_connection_state_t conn = NULL;
+
+static pthread_mutex_t mutex_amqp_con = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_amqp_decon = PTHREAD_MUTEX_INITIALIZER;
 
 void
 on_error (int x, char const *context)
@@ -121,6 +125,7 @@ on_amqp_error (amqp_rpc_reply_t x, char const *context)
 void
 amqp_connect (void)
 {
+  pthread_mutex_lock (&mutex_amqp_con);
   amqp_errors = false;
 
   struct timeval tv;
@@ -172,16 +177,19 @@ amqp_connect (void)
 	  n2a_logger (LG_INFO, "AMQP: Successfully connected");
 	  amqp_connected = true;
       amqp_lastconnect = now;
-      n2a_pop_all_cache (TRUE);
+      if (!first)
+          n2a_pop_all_cache (TRUE);
+      first = false;
 	}
 
     }
-
+  pthread_mutex_unlock (&mutex_amqp_con);
 }
 
 void
 amqp_disconnect (void)
 {
+  pthread_mutex_lock (&mutex_amqp_decon);
   amqp_errors = false;
   
   if (amqp_connected)
@@ -208,6 +216,7 @@ amqp_disconnect (void)
     {
       n2a_logger (LG_INFO, "AMQP: Impossible to disconnect, not connected");
     }
+  pthread_mutex_unlock (&mutex_amqp_decon);
 }
 
 int
@@ -243,8 +252,6 @@ amqp_publish (const char *routingkey, const char *message)
      amqp_disconnect ();
      return -1;
 		}
-      
-      n2a_pop_all_cache (FALSE);
       
       return 0;
     }
