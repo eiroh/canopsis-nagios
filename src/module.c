@@ -58,6 +58,7 @@ nebmodule_init (int flags __attribute__ ((__unused__)), char *args, nebmodule *h
   g_options.cache_size = 500;
   g_options.autoflush = 60;
   g_options.autopop = 60;
+  g_options.multithread = FALSE;
   g_options.cache_file = "/usr/local/nagios/var/canopsis.cache";
 
   // Parse module options
@@ -146,6 +147,32 @@ n2a_parse_arguments (const char *args_orig)
           g_options.max_size = strtol (right, NULL, 10);
           n2a_logger (LG_DEBUG, "Setting max_size buffer to %d bits",
               g_options.max_size);
+        }
+      else if (strcmp(left, "multithread") == 0)
+        {
+          if (strncasecmp(right,"y", 1) == 0 || strncasecmp(right,"t", 1) == 0)
+              g_options.multithread = TRUE;
+          else if (strncasecmp(right,"f", 1) == 0 || strncasecmp(right,"n", 1) == 0)
+              g_options.multithread = FALSE;
+          else {
+              char *sav;
+              int r = strtol (right, &sav, 10);
+              if (right == sav)
+                  g_options.multithread = FALSE;
+              else {
+                  switch (r) {
+                      case 1:
+                        g_options.multithread = TRUE;
+                        break;
+                      case 0:
+                      default:
+                        g_options.multithread = FALSE;
+                        break;
+                  }
+              }
+          }
+          n2a_logger (LG_DEBUG, "Setting multithread to '%s'",
+              g_options.multithread ? "true": "false");
         }
       else if (strcmp (left, "autopop") == 0)
         {

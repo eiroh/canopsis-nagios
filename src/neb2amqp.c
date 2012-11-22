@@ -125,7 +125,8 @@ on_amqp_error (amqp_rpc_reply_t x, char const *context)
 void
 amqp_connect (void)
 {
-  pthread_mutex_lock (&mutex_amqp_con);
+  if (g_options.multithread)
+      pthread_mutex_lock (&mutex_amqp_con);
   amqp_errors = false;
 
   struct timeval tv;
@@ -184,13 +185,15 @@ amqp_connect (void)
 
     }
   amqp_lastconnect = now;
-  pthread_mutex_unlock (&mutex_amqp_con);
+  if (g_options.multithread)
+      pthread_mutex_unlock (&mutex_amqp_con);
 }
 
 void
 amqp_disconnect (void)
 {
-  pthread_mutex_lock (&mutex_amqp_decon);
+  if (g_options.multithread)
+      pthread_mutex_lock (&mutex_amqp_decon);
   amqp_errors = false;
   
   if (amqp_connected)
@@ -217,7 +220,8 @@ amqp_disconnect (void)
     {
       n2a_logger (LG_INFO, "AMQP: Impossible to disconnect, not connected");
     }
-  pthread_mutex_unlock (&mutex_amqp_decon);
+  if (g_options.multithread)
+      pthread_mutex_unlock (&mutex_amqp_decon);
 }
 
 int

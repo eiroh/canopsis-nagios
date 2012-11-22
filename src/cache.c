@@ -48,6 +48,14 @@ static pthread_t thread_pop;
 static pthread_mutex_t mutex_pop = PTHREAD_MUTEX_INITIALIZER;
 static const char *tkey = NULL, *tmsg = NULL;
 
+#define n2a_mutex_lock(lock) \
+if (g_options.multithread)   \
+    pthread_mutex_lock (lock);
+
+#define n2a_mutex_unlock(lock) \
+if (g_options.multithread)     \
+    pthread_mutex_unlock (lock);
+
 static int
 compare (const void * a, const void * b)
 {
@@ -99,15 +107,15 @@ create_empty_file (const char *file)
 void
 n2a_clear_cache (void)
 {
-    if (thread_running) {
+    if (thread_running && g_options.multithread) {
         n2a_logger (LG_INFO, "waiting for %ld...", thread_pop);
         pthread_join (thread_pop, NULL);
         n2a_logger (LG_INFO, "done");
     }
     n2a_flush_cache (TRUE);
-    pthread_mutex_lock (&mutex_pop);
+    n2a_mutex_lock (&mutex_pop);
     iniparser_freedict (ini);
-    pthread_mutex_unlock (&mutex_pop);
+    n2a_mutex_unlock (&mutex_pop);
 }
 
 static void
@@ -160,6 +168,10 @@ n2a_init_cache (void)
         return;
     }
 
+    if (!iniparser_find_entry (ini, "cache")) {
+        n2a_logger (LG_CRIT, "invalid cache file! No 'cache' entry found");
+        iniparser_set (ini, "cache", NULL);
+    }
     int n = iniparser_getsecnkeys (ini, "cache");
     if (n > 0) {
         char **keys = iniparser_getseckeys (ini, "cache");
@@ -189,21 +201,21 @@ n2a_flush_cache (unsigned int force)
     if (g_options.autoflush == 0)
         goto do_it;
     now = time (NULL);
-    if ((int) difftime (now, last_flush) < g_options.autoflush)
+    if ((int) difftime (now, last_flush) < g_options.autoflush && !force)
         return;
 
 do_it:
     last_flush = now;
+    n2a_mutex_lock (&mutex_pop);
     FILE *db = fopen (g_options.cache_file, "w");
     if (db != NULL) {
-        pthread_mutex_lock (&mutex_pop);
         iniparser_dump_ini (ini, db);
-        pthread_mutex_unlock (&mutex_pop);
 
         fclose (db);
     } else {
         n2a_logger (LG_CRIT, "CACHE: flush error: %s", strerror (errno));
     }
+    n2a_mutex_unlock (&mutex_pop);
 }
 
 void
@@ -211,11 +223,10 @@ n2a_record_cache (const char *key, const char *message)
 {
     char index[256];
     /* avoid caching the message twice */
-    pthread_mutex_lock (&mutex_pop);
     if (key == tkey && message == tmsg) {
-        pthread_mutex_unlock (&mutex_pop);
         return;
     }
+    n2a_mutex_lock (&mutex_pop);
     int n = iniparser_getsecnkeys (ini, "cache") / 2;
     if (n > g_options.cache_size) {
         n2a_logger (LG_CRIT, "cache size exceded! Unable to cache new messages");
@@ -227,7 +238,7 @@ n2a_record_cache (const char *key, const char *message)
     snprintf (index, 256, "cache:message_%d", lastid);
     iniparser_set (ini, index, message);
     n2a_logger (LG_INFO, "add message in cache: '%s' (%d)", key, lastid);
-    pthread_mutex_unlock (&mutex_pop);
+    n2a_mutex_unlock (&mutex_pop);
 }
 
 static void *
@@ -236,9 +247,9 @@ n2a_pop_process (void *data)
     pop_lock = TRUE;
     last_pop = 0;
     int r = 0;
-    pthread_mutex_lock (&mutex_pop);
+    n2a_mutex_lock (&mutex_pop);
     int n = iniparser_getsecnkeys (ini, "cache"); //*(int *)data; 
-    pthread_mutex_unlock (&mutex_pop);
+    n2a_mutex_unlock (&mutex_pop);
     int storm, cpt = 0;
     size_t l;
     char convert[128];
@@ -268,9 +279,8 @@ n2a_pop_process (void *data)
     n2a_logger (LG_INFO, "depiling %d/%d messages from cache", storm, n/2);
 
     do {
-        pthread_mutex_lock (&mutex_pop);
+        n2a_mutex_lock (&mutex_pop);
         char **keys = iniparser_getseckeys (ini, "cache");
-        pthread_mutex_unlock (&mutex_pop);
         /* sort the returned keys */
         qsort (keys, (size_t) n, sizeof (char *), compare);
         char *index_key = keys[0];
@@ -279,23 +289,22 @@ n2a_pop_process (void *data)
         char *m = strchr (index_key, '_');
         char index_message[256];
         snprintf (index_message, 256, "cache:message_%s", m+1);
-        pthread_mutex_lock (&mutex_pop);
         char *key = iniparser_getstring (ini, index_key, NULL);
         char *message = iniparser_getstring (ini, index_message, NULL);
         tkey = key;
         tmsg = message;
-        pthread_mutex_unlock (&mutex_pop);
+        n2a_mutex_unlock (&mutex_pop);
         int r = amqp_publish (key, message);
         if (r < 0) {
             n2a_logger (LG_CRIT, "error while purging cache from message '%s'",
             key);
             break;
         }
-        pthread_mutex_lock (&mutex_pop);
+        n2a_mutex_lock (&mutex_pop);
         iniparser_unset (ini, index_key);
         iniparser_unset (ini, index_message);
         n = iniparser_getsecnkeys (ini, "cache");
-        pthread_mutex_unlock (&mutex_pop);
+        n2a_mutex_unlock (&mutex_pop);
         cpt++;
         n2a_logger (LG_INFO, "cache successfuly purged from message '%s' (%d/%d)",
         index_message, cpt, storm);
@@ -304,19 +313,21 @@ n2a_pop_process (void *data)
         usleep (250000);
     } while (r == 0 && (n / 2) > 0);
     if (r == 0 && (n / 2) == 0) {
-        pthread_mutex_lock (&mutex_pop);
+        n2a_mutex_lock (&mutex_pop);
         fprintf (stdout, "all messages purged\n");
         lastid = 1;
-        pthread_mutex_unlock (&mutex_pop);
+        n2a_mutex_unlock (&mutex_pop);
     }
     last_pop = time (NULL);
 
-    n2a_logger (LG_INFO, "depiling thread %ld done", pthread_self());
+    if (g_options.multithread)
+        n2a_logger (LG_INFO, "depiling thread %ld done", pthread_self());
 
 end:
     alarm (g_options.autopop);
     pop_lock = FALSE;
-    pthread_exit (NULL);
+    if (g_options.multithread)
+        pthread_exit (NULL);
 
     return NULL;
 }
@@ -336,21 +347,25 @@ n2a_pop_all_cache (unsigned int force)
     if ((int) difftime (now, last_pop) < g_options.autopop)
         goto reschedule;
 
-    pthread_mutex_lock (&mutex_pop);
+    n2a_mutex_lock (&mutex_pop);
     int n = iniparser_getsecnkeys (ini, "cache");
-    pthread_mutex_unlock (&mutex_pop);
+    n2a_mutex_unlock (&mutex_pop);
 
     if ((n / 2) == 0)
         goto reschedule;
 
-    if (thread_running) {
+    if (thread_running && g_options.multithread) {
         n2a_logger (LG_INFO, "waiting for %ld...\n", thread_pop);
         pthread_join (thread_pop, NULL);
         n2a_logger (LG_INFO, "Done");
     }
-    pthread_create (&thread_pop, NULL, n2a_pop_process, &n);
-    thread_running = TRUE;
-    n2a_logger (LG_INFO, "depiling thread %ld running", thread_pop);
+    if (g_options.multithread) {
+        pthread_create (&thread_pop, NULL, n2a_pop_process, &n);
+        thread_running = TRUE;
+        n2a_logger (LG_INFO, "depiling thread %ld running", thread_pop);
+    } else {
+        n2a_pop_process (NULL);
+    }
     return;
 
 reschedule:
