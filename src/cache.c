@@ -230,7 +230,7 @@ n2a_pop_process (void *data)
     last_pop = 0;
     int r = 0;
     pthread_mutex_lock (&mutex_pop);
-    int n = iniparser_getsecnkeys (ini, "cache");
+    int n = iniparser_getsecnkeys (ini, "cache"); //*(int *)data; 
     pthread_mutex_unlock (&mutex_pop);
     int storm, cpt = 0;
     size_t l;
@@ -329,12 +329,19 @@ n2a_pop_all_cache (unsigned int force)
     if ((int) difftime (now, last_pop) < g_options.autopop)
         goto reschedule;
 
+    pthread_mutex_lock (&mutex_pop);
+    int n = iniparser_getsecnkeys (ini, "cache");
+    pthread_mutex_unlock (&mutex_pop);
+
+    if ((n / 2) == 0)
+        goto reschedule;
+
     if (thread_running) {
         n2a_logger (LG_INFO, "waiting for %ld...\n", thread_pop);
         pthread_join (thread_pop, NULL);
         n2a_logger (LG_INFO, "Done");
     }
-    pthread_create (&thread_pop, NULL, n2a_pop_process, NULL);
+    pthread_create (&thread_pop, NULL, n2a_pop_process, &n);
     thread_running = TRUE;
     n2a_logger (LG_INFO, "depiling thread %ld running", thread_pop);
     return;

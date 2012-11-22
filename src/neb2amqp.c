@@ -183,6 +183,7 @@ amqp_connect (void)
 	}
 
     }
+  amqp_lastconnect = now;
   pthread_mutex_unlock (&mutex_amqp_con);
 }
 
