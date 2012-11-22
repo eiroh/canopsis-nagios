@@ -105,7 +105,9 @@ n2a_clear_cache (void)
         n2a_logger (LG_INFO, "done");
     }
     n2a_flush_cache (TRUE);
+    pthread_mutex_lock (&mutex_pop);
     iniparser_freedict (ini);
+    pthread_mutex_unlock (&mutex_pop);
 }
 
 static void
@@ -214,6 +216,11 @@ n2a_record_cache (const char *key, const char *message)
         pthread_mutex_unlock (&mutex_pop);
         return;
     }
+    int n = iniparser_getsecnkeys (ini, "cache") / 2;
+    if (n > g_options.cache_size) {
+        n2a_logger (LG_CRIT, "cache size exceded! Unable to cache new messages");
+        return;
+    }
     lastid++;
     snprintf (index, 256, "cache:key_%d", lastid);
     iniparser_set (ini, index, key);
@@ -294,7 +301,7 @@ n2a_pop_process (void *data)
         index_message, cpt, storm);
         if (cpt > storm)
             break;
-        usleep (50000);
+        usleep (250000);
     } while (r == 0 && (n / 2) > 0);
     if (r == 0 && (n / 2) == 0) {
         pthread_mutex_lock (&mutex_pop);

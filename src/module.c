@@ -91,10 +91,10 @@ nebmodule_deinit (int flags __attribute__ ((__unused__)), int reason
 {
   n2a_logger (LG_INFO, "deinitializing");
   
-  xfree (g_args);
   deregister_callbacks ();
   n2a_clear_cache ();
   amqp_disconnect ();
+  xfree (g_args);
  
   return 0;
 }
