@@ -63,6 +63,7 @@ Options:
                     lot of I/O) (default: 60)
     autopop =       Delay in seconds between two automatic flush of the cache into the AMQP bus
                     if it is available. (60)
+    rate =          Delay in ms between two messages when depiling. (250)
     multithread =   Enable multithreading support for the depiling process. This option requires a good
                     CPU and your canopsis must be running on a strong server because we will send a lot
                     of data in a short time. (false)

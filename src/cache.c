@@ -40,7 +40,7 @@ static dictionary *ini = NULL;
 static unsigned int dbsetup = FALSE;
 static time_t last_flush = 0;
 static time_t last_pop = 0;
-static int lastid = 1;
+static int lastid = 0;
 static unsigned int thread_running = FALSE;
 static unsigned int pop_lock = FALSE;
 static const char *tkey = NULL, *tmsg = NULL;
@@ -320,14 +320,14 @@ n2a_pop_process (void *data)
         cpt++;
         n2a_logger (LG_INFO, "cache successfuly purged from message '%s' (%d/%d)",
         index_message, cpt, storm);
-        if (cpt > storm)
+        if (cpt >= storm)
             break;
-        usleep (250000);
+        usleep (g_options.rate);
     } while (r == 0 && (n / 2) > 0);
     if (r == 0 && (n / 2) == 0) {
         n2a_mutex_lock (&mutex_pop);
         fprintf (stdout, "all messages purged\n");
-        lastid = 1;
+        lastid = 0;
         n2a_mutex_unlock (&mutex_pop);
     }
     last_pop = time (NULL);

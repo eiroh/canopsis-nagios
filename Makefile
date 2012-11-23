@@ -53,9 +53,6 @@ OBJS_INI  = $(SRC_INI:.c=.o)
 
 default:    libjansson.a librabbitmq.a libiniparser.a neb2amqp.o
 
-flag:
-	@(touch .flag)
-
 libjansson.a: $(OBJS_JSON)
 	@($(AR) $(ARFLAGS) libjansson.a $(OBJS_JSON))
 
@@ -65,11 +62,11 @@ librabbitmq.a: $(OBJS_RMQ)
 libiniparser.a: $(OBJS_INI)
 	@($(AR) $(ARFLAGS) libiniparser.a $(OBJS_INI))
 
-neb2amqp.o: libjansson.a librabbitmq.a libiniparser.a flag
+neb2amqp.o: libjansson.a librabbitmq.a libiniparser.a $(SRC_N2A)
 	$(CC) $(INCLUDES) $(CFLAGS) -lpthread -o $@ $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a -DPTHREAD
 	@($(ECHO) "\n$@ compiled successfuly!")
 	
-mono: libjansson.a librabbitmq.a libiniparser.a flag
+mono: libjansson.a librabbitmq.a libiniparser.a $(SRC_N2A)
 	$(CC) $(INCLUDES) $(CFLAGS) -o neb2amqp.o $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a
 	@($(ECHO) "\n$@ compiled successfuly!")
 
