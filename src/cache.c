@@ -130,12 +130,16 @@ n2a_clear_cache (void)
     n2a_mutex_unlock (&mutex_pop);
 }
 
+#ifdef DEBUG
 static void
 alarm_handler (int sig)
 {
-    n2a_pop_all_cache (FALSE);
+    n2a_logger (LG_DEBUG, "Got SIGALRM");
+    unsigned int force = TRUE;
+    n2a_pop_all_cache ((void *)&force);
     signal (SIGALRM, alarm_handler);
 }
+#endif
 
 void
 n2a_init_cache (void)
@@ -198,8 +202,23 @@ n2a_init_cache (void)
     }
 
     dbsetup = TRUE;
+    unsigned int force = FALSE;
+#ifdef DEBUG
     signal (SIGALRM, alarm_handler);
     alarm (g_options.autopop);
+#else
+    time_t now = time (NULL);
+    schedule_new_event(EVENT_USER_FUNCTION,
+                       TRUE,
+                       now+g_options.autopop,
+                       FALSE,
+                       g_options.autopop,
+                       NULL,
+                       TRUE,
+                       (void *)n2a_pop_all_cache,
+                       (void *)&force,
+                       0);
+#endif
 }
 
 void
@@ -332,12 +351,28 @@ n2a_pop_process (void *data)
     }
     last_pop = time (NULL);
 
+#ifdef PTHREAD
     if (g_options.multithread)
         n2a_logger (LG_INFO, "depiling thread %ld done", pthread_self());
+#endif
 
 end:
+#ifdef DEBUG
     alarm (g_options.autopop);
+#else
     pop_lock = FALSE;
+    unsigned int force = FALSE;
+    schedule_new_event(EVENT_USER_FUNCTION,
+                       TRUE,
+                       last_pop+g_options.autopop,
+                       FALSE,
+                       g_options.autopop,
+                       NULL,
+                       TRUE,
+                       (void *)n2a_pop_all_cache,
+                       (void *)&force,
+                       0);
+#endif
 #ifdef PTHREAD
     if (g_options.multithread)
         pthread_exit (NULL);
@@ -347,9 +382,11 @@ end:
 }
 
 void
-n2a_pop_all_cache (unsigned int force)
+n2a_pop_all_cache (void *pf)
 {
-    time_t now = 0;
+    time_t now = time(NULL);
+    unsigned int force = *(int *)pf;
+    unsigned int f = FALSE;
 
     if (pop_lock)
         goto reschedule;
@@ -357,7 +394,6 @@ n2a_pop_all_cache (unsigned int force)
     if (g_options.autopop < 0 && !force)
         goto reschedule;
 
-    now = time (NULL);
     if ((int) difftime (now, last_pop) < g_options.autopop)
         goto reschedule;
 
@@ -387,5 +423,18 @@ n2a_pop_all_cache (unsigned int force)
     return;
 
 reschedule:
+#ifdef DEBUG
     alarm (g_options.autopop);
+#else
+    schedule_new_event(EVENT_USER_FUNCTION,
+                       TRUE,
+                       now+g_options.autopop,
+                       FALSE,
+                       g_options.autopop,
+                       NULL,
+                       TRUE,
+                       (void *)n2a_pop_all_cache,
+                       (void *)&f,
+                       0);
+#endif
 }

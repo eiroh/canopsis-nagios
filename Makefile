@@ -62,12 +62,16 @@ librabbitmq.a: $(OBJS_RMQ)
 libiniparser.a: $(OBJS_INI)
 	@($(AR) $(ARFLAGS) libiniparser.a $(OBJS_INI))
 
-neb2amqp.o: libjansson.a librabbitmq.a libiniparser.a $(SRC_N2A)
-	$(CC) $(INCLUDES) $(CFLAGS) -lpthread -o $@ $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a -DPTHREAD
+neb2amqp.o: $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a
+	$(CC) $(INCLUDES) $(CFLAGS) -lpthread -o $@ $^ -DPTHREAD
 	@($(ECHO) "\n$@ compiled successfuly!")
-	
-mono: libjansson.a librabbitmq.a libiniparser.a $(SRC_N2A)
-	$(CC) $(INCLUDES) $(CFLAGS) -o neb2amqp.o $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a
+
+debug: $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a
+	$(CC) $(INCLUDES) $(CFLAGS) -g -lpthread -o neb2amqp.o $^ -DPTHREAD -DDEBUG
+	@($(ECHO) "\n$@ compiled successfuly!")
+
+mono: $(SRC_N2A) libjansson.a librabbitmq.a libiniparser.a
+	$(CC) $(INCLUDES) $(CFLAGS) -o neb2amqp.o $^
 	@($(ECHO) "\n$@ compiled successfuly!")
 
 clean:
