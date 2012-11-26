@@ -357,10 +357,10 @@ n2a_pop_process (void *data)
 #endif
 
 end:
+    pop_lock = FALSE;
 #ifdef DEBUG
     alarm (g_options.autopop);
 #else
-    pop_lock = FALSE;
     unsigned int force = FALSE;
     schedule_new_event(EVENT_USER_FUNCTION,
                        TRUE,
