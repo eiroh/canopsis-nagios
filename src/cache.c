@@ -286,6 +286,10 @@ n2a_pop_process (void *data)
     char convert[128];
     if ((n / 2) <= 0)
         goto end;
+    if (g_options.flush > 0) {
+        storm = xmin (n/2, g_options.flush);
+        goto proceed;
+    }
     snprintf (convert, 128, "%d", n);
     /* in order to avoid flush storming the AMQP bus, evaluate the number of
      * messages to flush */
@@ -307,6 +311,7 @@ n2a_pop_process (void *data)
             storm = n/(20 * (10^(l-3)));
             break;
     }
+proceed:
     n2a_logger (LG_INFO, "depiling %d/%d messages from cache", storm, n/2);
 
     do {

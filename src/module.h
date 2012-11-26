@@ -36,6 +36,7 @@ struct options {
     int autoflush;
     int autopop;
     int rate;
+    int flush;
     unsigned int multithread;
     char *cache_file;
 	char *userid;
