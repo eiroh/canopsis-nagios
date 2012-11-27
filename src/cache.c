@@ -43,7 +43,8 @@ static time_t last_pop = 0;
 static int lastid = 0;
 static unsigned int thread_running = FALSE;
 static unsigned int pop_lock = FALSE;
-static const char *tkey = NULL, *tmsg = NULL;
+static volatile const char *tkey = NULL, *tmsg = NULL;
+static volatile int c_size = -10000;
 
 #ifdef PTHREAD
     #include <pthread.h>
@@ -290,46 +291,46 @@ n2a_pop_process (void *data)
     last_pop = 0;
     int r = 0;
     n2a_mutex_lock (&mutex_pop);
-    int n = iniparser_getsecnkeys (ini, "cache"); //*(int *)data; 
+    c_size = iniparser_getsecnkeys (ini, "cache");
     n2a_mutex_unlock (&mutex_pop);
     int storm, cpt = 0;
     size_t l;
     char convert[128];
-    if ((n / 2) <= 0)
+    if ((c_size / 2) <= 0)
         goto end;
     if (g_options.flush > 0) {
-        storm = xmin (n/2, g_options.flush);
+        storm = xmin (c_size/2, g_options.flush);
         goto proceed;
     }
-    snprintf (convert, 128, "%d", n);
+    snprintf (convert, 128, "%d", c_size);
     /* in order to avoid flush storming the AMQP bus, evaluate the number of
      * messages to flush */
     switch ((l = xstrlen (convert))) {
         case 1:
         case 2:
-            storm = n/2;
+            storm = c_size/2;
             break;
         case 3:
-            storm = n/4;
+            storm = c_size/4;
             break;
         case 4:
-            storm = n/20;
+            storm = c_size/20;
             break;
         case 5:
-            storm = n/200;
+            storm = c_size/200;
             break;
         default:
-            storm = n/(20 * (10^(l-3)));
+            storm = c_size/(20 * (10^(l-3)));
             break;
     }
 proceed:
-    n2a_logger (LG_INFO, "depiling %d/%d messages from cache", storm, n/2);
+    n2a_logger (LG_INFO, "depiling %d/%d messages from cache", storm, c_size/2);
 
     do {
         n2a_mutex_lock (&mutex_pop);
         char **keys = iniparser_getseckeys (ini, "cache");
         /* sort the returned keys */
-        qsort (keys, (size_t) n, sizeof (char *), compare);
+        qsort (keys, (size_t) c_size, sizeof (char *), compare);
         char *index_key = keys[0];
         /* then free the list although the doc says not to... */
         xfree (keys);
@@ -350,7 +351,7 @@ proceed:
         n2a_mutex_lock (&mutex_pop);
         iniparser_unset (ini, index_key);
         iniparser_unset (ini, index_message);
-        n = iniparser_getsecnkeys (ini, "cache");
+        c_size = iniparser_getsecnkeys (ini, "cache");
         n2a_mutex_unlock (&mutex_pop);
         cpt++;
         n2a_logger (LG_INFO, "cache successfuly purged from message '%s' (%d/%d)",
@@ -358,8 +359,8 @@ proceed:
         if (cpt >= storm)
             break;
         usleep (g_options.rate);
-    } while (r == 0 && (n / 2) > 0);
-    if (r == 0 && (n / 2) == 0) {
+    } while (r == 0 && (c_size / 2) > 0);
+    if (r == 0 && (c_size / 2) == 0) {
         n2a_mutex_lock (&mutex_pop);
         fprintf (stdout, "all messages purged\n");
         lastid = 0;
@@ -413,11 +414,11 @@ n2a_pop_all_cache (void *pf)
     if ((int) difftime (now, last_pop) < g_options.autopop)
         goto reschedule;
 
-    n2a_mutex_lock (&mutex_pop);
-    int n = iniparser_getsecnkeys (ini, "cache");
-    n2a_mutex_unlock (&mutex_pop);
+    /* the first time c_size should be equal to -10000 */
+    if (c_size == -10000)
+        c_size = iniparser_getsecnkeys (ini, "cache");
 
-    if ((n / 2) == 0)
+    if ((c_size / 2) == 0)
         goto reschedule;
 
 #ifdef PTHREAD        
@@ -427,7 +428,7 @@ n2a_pop_all_cache (void *pf)
         n2a_logger (LG_INFO, "Done");
     }
     if (g_options.multithread) {
-        pthread_create (&thread_pop, NULL, n2a_pop_process, &n);
+        pthread_create (&thread_pop, NULL, n2a_pop_process, NULL);
         thread_running = TRUE;
         n2a_logger (LG_INFO, "depiling thread %ld running", thread_pop);
     } else {
