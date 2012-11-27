@@ -260,8 +260,19 @@ n2a_record_cache (const char *key, const char *message)
     n2a_mutex_lock (&mutex_pop);
     int n = iniparser_getsecnkeys (ini, "cache") / 2;
     if (n > g_options.cache_size) {
-        n2a_logger (LG_CRIT, "cache size exceded! Unable to cache new messages");
-        return;
+        n2a_logger (LG_CRIT, "cache size exceded! Replacing oldest messages");
+        char **keys = iniparser_getseckeys (ini, "cache");
+        /* sort the returned keys */
+        qsort (keys, (size_t) n, sizeof (char *), compare);
+        char *index_key = keys[0];
+        /* then free the list although the doc says not to... */
+        xfree (keys);
+        char *m = strchr (index_key, '_');
+        int first = strtol (m+1, NULL, 10);
+        snprintf (index, 256, "cache:key_%d", first);
+        iniparser_unset (ini, index);
+        snprintf (index, 256, "cache:message_%d", first);
+        iniparser_unset (ini, index);
     }
     lastid++;
     snprintf (index, 256, "cache:key_%d", lastid);
