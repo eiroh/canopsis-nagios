@@ -131,7 +131,7 @@ n2a_event_host_check (int event_type __attribute__ ((__unused__)), void *data)
 
       size_t l = xstrlen(g_options.connector) + xstrlen(g_options.eventsource_name) + xstrlen(c->host_name) + 20; 
 
-//      nebstruct_host_check_data_to_json(&buffer, c); 
+      nebstruct_host_check_data_to_json(&buffer, c); 
 
       // DO NOT FREE !!!
       xalloca(key, xmin(g_options.max_size, (int)l) * sizeof(char));
