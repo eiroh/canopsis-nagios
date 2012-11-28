@@ -44,7 +44,7 @@ static int lastid = 0;
 static unsigned int thread_running = FALSE;
 static unsigned int pop_lock = FALSE;
 static volatile const char *tkey = NULL, *tmsg = NULL;
-static volatile int c_size = -10000;
+volatile int c_size = -10000;
 
 #ifdef PTHREAD
     #include <pthread.h>
